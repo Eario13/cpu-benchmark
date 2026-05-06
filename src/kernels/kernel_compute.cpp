@@ -11,6 +11,7 @@
     #define PLATFORM_X86 1
     #ifdef _WIN32
         #include <intrin.h>
+        #include <immintrin.h>
     #else
         #include <immintrin.h>
     #endif
@@ -53,7 +54,7 @@ namespace compute {
 // Design principles:
 // 1. Pure scalar FP64 - same precision on all architectures
 // 2. 8 independent chains - saturate FMA unit pipeline (latency hiding)
-// 3. No SIMD intrinsics - compiler generates scalar FMA instructions
+// 3. Explicit scalar FMA on x86 - avoids compiler-specific std::fma lowering
 // 4. Volatile barriers - prevent unwanted optimizations
 // ============================================================================
 
@@ -86,6 +87,36 @@ __attribute__((noinline))
 #endif
 NO_VECTORIZE_ATTR
 size_t scalar_fp64_baseline(double* result, size_t iterations) {
+#if defined(PLATFORM_X86) && defined(__FMA__)
+    __m128d a0 = _mm_set_sd(1.0);
+    __m128d a1 = _mm_set_sd(1.1);
+    __m128d a2 = _mm_set_sd(1.2);
+    __m128d a3 = _mm_set_sd(1.3);
+    __m128d a4 = _mm_set_sd(1.4);
+    __m128d a5 = _mm_set_sd(1.5);
+    __m128d a6 = _mm_set_sd(1.6);
+    __m128d a7 = _mm_set_sd(1.7);
+
+    const __m128d mul = _mm_set_sd(1.0000001);
+    const __m128d add = _mm_set_sd(0.0000001);
+
+    NOVEC_LOOP
+    for (size_t i = 0; i < iterations; ++i) {
+        a0 = _mm_fmadd_sd(a0, mul, add);
+        a1 = _mm_fmadd_sd(a1, mul, add);
+        a2 = _mm_fmadd_sd(a2, mul, add);
+        a3 = _mm_fmadd_sd(a3, mul, add);
+        a4 = _mm_fmadd_sd(a4, mul, add);
+        a5 = _mm_fmadd_sd(a5, mul, add);
+        a6 = _mm_fmadd_sd(a6, mul, add);
+        a7 = _mm_fmadd_sd(a7, mul, add);
+    }
+
+    *result = _mm_cvtsd_f64(a0) + _mm_cvtsd_f64(a1) +
+              _mm_cvtsd_f64(a2) + _mm_cvtsd_f64(a3) +
+              _mm_cvtsd_f64(a4) + _mm_cvtsd_f64(a5) +
+              _mm_cvtsd_f64(a6) + _mm_cvtsd_f64(a7);
+#else
     // 8 independent accumulator chains for instruction-level parallelism
     // This saturates the FMA pipeline on most modern CPUs
     double a0 = 1.0, a1 = 1.1, a2 = 1.2, a3 = 1.3;
@@ -113,6 +144,7 @@ size_t scalar_fp64_baseline(double* result, size_t iterations) {
         
     // Prevent dead code elimination
     *result = a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7;
+#endif
     
     // Return total FLOPs: 8 FMAs * 2 FLOPs each * iterations
     return iterations * 8 * 2;
