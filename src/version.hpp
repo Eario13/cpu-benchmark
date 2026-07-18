@@ -9,11 +9,11 @@ namespace version {
 
 // Version numbers
 constexpr int MAJOR = 0;
-constexpr int MINOR = 42;
+constexpr int MINOR = 46;
 constexpr int PATCH = 0;
 
 // Version string in format "beta X.Y"
-constexpr const char* VERSION_STRING = "beta 0.45";
+constexpr const char* VERSION_STRING = "beta 0.46";
 
 // Build date and time 
 constexpr const char* BUILD_DATE = __DATE__;

@@ -100,6 +100,7 @@ set(BENCHMARK_SOURCES
     src/score_calculator.cpp
     src/thread_affinity.cpp
     src/persistent_thread_pool.cpp
+    src/server_performance.cpp
     src/result_submission.cpp
 )
 
@@ -185,7 +186,8 @@ if(WIN32)
     # Windows threading and WinSock for result submission
     # - advapi32: registry access (RegOpenKeyEx, ...)
     # - pdh: real-time CPU frequency sampling (Processor Frequency counter)
-    target_link_libraries(cpu_benchmark PRIVATE ws2_32 advapi32 pdh)
+    # - powrprof: temporary High Performance power scheme on Windows Server
+    target_link_libraries(cpu_benchmark PRIVATE ws2_32 advapi32 pdh powrprof)
 else()
     find_package(Threads REQUIRED)
     target_link_libraries(cpu_benchmark PRIVATE Threads::Threads)
@@ -217,6 +219,7 @@ if(BUILD_TESTS)
         src/score_calculator.cpp
         src/thread_affinity.cpp
         src/persistent_thread_pool.cpp
+        src/server_performance.cpp
         src/result_submission.cpp
         src/kernels/kernel_scalar.cpp
         src/kernels/kernel_sse2.cpp
@@ -227,6 +230,13 @@ if(BUILD_TESTS)
         src/kernels/kernel_compute.cpp
         src/kernels/kernel_compute_avx512.cpp
     )
+
+    if(WIN32)
+        # LIB_SOURCES includes platform/result-submission/server-performance code.
+        # Make the required Windows system libraries available to all test targets
+        # created below.
+        link_libraries(ws2_32 advapi32 pdh powrprof)
+    endif()
     
     # Common include directories for tests
     set(TEST_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/kernels)
