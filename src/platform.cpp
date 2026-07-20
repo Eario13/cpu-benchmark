@@ -19,6 +19,7 @@
 #elif defined(__linux__)
     #include <fstream>
     #include <sstream>
+    #include <sys/utsname.h>
     #include <unistd.h>
 #elif defined(__APPLE__)
     #include <sys/sysctl.h>
@@ -198,12 +199,13 @@ std::string get_os_version() {
     return version;
     
 #elif defined(__linux__)
-    // Linux: try /etc/os-release first
+    // Linux: combine the distribution name and running kernel release in one value.
+    // This string is also sent as os.version in benchmark submissions.
+    std::string pretty_name;
     std::ifstream os_release("/etc/os-release");
     if (os_release.is_open()) {
         std::string line;
-        std::string pretty_name;
-        
+
         while (std::getline(os_release, line)) {
             if (line.find("PRETTY_NAME=") == 0) {
                 pretty_name = line.substr(12);
@@ -214,27 +216,47 @@ std::string get_os_version() {
                 if (!pretty_name.empty() && pretty_name.back() == '"') {
                     pretty_name.pop_back();
                 }
-                return pretty_name;
+                break;
             }
         }
     }
-    
-    // Fallback: try uname
-    std::ifstream version_file("/proc/version");
-    if (version_file.is_open()) {
-        std::string version;
-        std::getline(version_file, version);
-        // Extract kernel version
-        size_t pos = version.find("Linux version ");
-        if (pos != std::string::npos) {
-            version = version.substr(pos + 14);
-            pos = version.find(' ');
+
+    std::string kernel_release;
+    struct utsname kernel_info {};
+    if (uname(&kernel_info) == 0 && kernel_info.release[0] != '\0') {
+        kernel_release = kernel_info.release;
+    }
+
+    // Fallback for restricted environments where uname is unavailable.
+    if (kernel_release.empty()) {
+        std::ifstream version_file("/proc/version");
+        if (version_file.is_open()) {
+            std::string version;
+            std::getline(version_file, version);
+            // Extract kernel version
+            size_t pos = version.find("Linux version ");
             if (pos != std::string::npos) {
-                return "Linux " + version.substr(0, pos);
+                version = version.substr(pos + 14);
+                pos = version.find(' ');
+                if (pos != std::string::npos) {
+                    kernel_release = version.substr(0, pos);
+                } else if (!version.empty()) {
+                    kernel_release = version;
+                }
             }
         }
     }
-    
+
+    if (!pretty_name.empty() && !kernel_release.empty()) {
+        return pretty_name + " " + kernel_release;
+    }
+    if (!pretty_name.empty()) {
+        return pretty_name;
+    }
+    if (!kernel_release.empty()) {
+        return "Linux " + kernel_release;
+    }
+
     return "Linux";
     
 #elif defined(__APPLE__)
